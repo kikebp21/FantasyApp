@@ -1,0 +1,13 @@
+[theme]
+# Colores oscuros/rojos inspirados en la imagen
+base="dark"
+# Color de texto principal (blanco)
+primaryColor="#FF4B4B" # Un rojo brillante que contrasta
+# Color de fondo principal (negro o gris oscuro)
+backgroundColor="#000000" 
+# Color del fondo de las tarjetas o elementos (gris oscuro)
+secondaryBackgroundColor="#1E1E1E" 
+# Color de texto (blanco)
+textColor="#FFFFFF" 
+# Fuente por defecto
+font="sans serif"
