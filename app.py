@@ -102,8 +102,8 @@ def gestionar_ligas(ligas_map):
                 st.success(f"¡La liga '{liga_a_eliminar_nombre}' ha sido eliminada!")
 
 
-def gestionar_jugadores(liga_id):
-    st.header("👤 Gestión de Participantes de la Liga Activa")
+def gestionar_jugadores(liga_id, nombre_liga):
+    st.header(f"👤 Gestión de Participantes de la Liga: {nombre_liga}")
     jugadores_actuales = obtener_jugadores(liga_id)
     
     tab1, tab2, tab3 = st.tabs(["➕ Nuevo Jugador", "➖ Eliminar Jugador", "✏️ Renombrar Jugador"])
@@ -119,7 +119,7 @@ def gestionar_jugadores(liga_id):
                 guardar_puntos(liga_id, nuevo_nombre, 1, 0)
                 st.success(f"¡{nuevo_nombre} añadido a la liga!")
             elif nuevo_nombre in jugadores_actuales:
-                 st.warning("Este jugador ya existe en la liga activa.")
+                 st.warning(f"Este jugador ya existe en la liga: '{nombre_liga}'.")
             else:
                 st.error("El nombre no puede estar vacío.")
 
@@ -301,9 +301,9 @@ def interfaz_rendimiento_jugador(liga_id, jugadores):
         st.dataframe(df_record, use_container_width=True, hide_index=True)
 
 
-def interfaz_pivote_completo(liga_id):
+def interfaz_pivote_completo(liga_id, nombre_liga):
     st.header("📋 Tabla Detallada de Puntos")
-    st.markdown("Visualización de todos los jugadores y sus puntos por jornada en la liga activa.")
+    st.markdown(f"Visualización de todos los jugadores y sus puntos por jornada en la liga: {nombre_liga}.")
     
     # 1. Traer todos los puntos de la liga
     df_long = pd.read_sql(f"""
@@ -415,7 +415,8 @@ def interfaz_consultas(liga_id):
 
 # --- PÁGINA PRINCIPAL ---
 def interfaz_home(ligas_map):
-    st.header("🏠 Pantalla Principal: Tus Ligas Fantasy")
+    # st.header("🏠 Pantalla Principal: Tus Ligas Fantasy")
+    st.markdown("## TUS LIGAS <span style='color:#FF4B4B;'>FANTASY</span>", unsafe_allow_html=True)
     
     if not ligas_map:
         st.warning("Actualmente no tienes ligas registradas. Ve a la sección 'Gestión de Ligas' en el menú lateral para crear la primera.")
@@ -434,8 +435,13 @@ def interfaz_home(ligas_map):
 def main():
     st.set_page_config(layout="wide", page_title="Gestor Fantasy", initial_sidebar_state="expanded")
     
-    st.title("⚽🏆 Gestor de Puntos Liga Fantasy")
-    
+    # st.title("⚽🏆 Gestor de Puntos Liga Fantasy")
+    st.markdown("""
+        <div style='text-align: center;'>
+            <h1>GESTOR DE PUNTOS LIGA <span style='color:#FF4B4B;'>FANTASY</span></h1>
+        </div>
+    """, unsafe_allow_html=True)
+
     ligas_map = obtener_ligas()
     
     liga_id_activa = None
@@ -466,7 +472,7 @@ def main():
         st.warning("Selecciona una liga en el menú lateral para acceder a estas opciones.")
 
     elif choice == "Gestión de Participantes":
-        gestionar_jugadores(liga_id_activa)
+        gestionar_jugadores(liga_id_activa, nombre_liga_activa)
         
     elif choice == "Rendimiento Individual":
         if jugadores:
@@ -480,7 +486,7 @@ def main():
     # Nueva Opción de Menú
     elif choice == "Tabla Completa":
         if liga_id_activa:
-            interfaz_pivote_completo(liga_id_activa)
+            interfaz_pivote_completo(liga_id_activa, nombre_liga_activa)
         else:
             st.warning("Selecciona una liga.")
             
