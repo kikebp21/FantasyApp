@@ -1,13 +1,30 @@
 [theme]
-# Colores oscuros/rojos inspirados en la imagen
+# Colores oscuros/rojos
 base="dark"
-# Color de texto principal (blanco)
-primaryColor="#FF4B4B" # Un rojo brillante que contrasta
+
+# Color de texto principal (botones, enlaces, métricas)
+primaryColor="#FF4B4B"
+
 # Color de fondo principal (negro o gris oscuro)
-backgroundColor="#000000" 
+backgroundColor="#11111f" 
+
 # Color del fondo de las tarjetas o elementos (gris oscuro)
-secondaryBackgroundColor="#1E1E1E" 
+secondaryBackgroundColor="#212529" 
+
 # Color de texto (blanco)
 textColor="#FFFFFF" 
+
 # Fuente por defecto
 font="sans serif"
+
+[global]
+# Esta configuración asegura que las variables de entorno de color sean usadas.
+# (Generalmente no es necesario cambiarla, pero es buena práctica)
+# developmentMode = false
+
+
+[global]
+# Esta sección fuerza el uso de un ancho de columna más amplio 
+# para que los DataFrames y gráficos se vean mejor.
+# Aunque no afecta el color, mejora la distribución visual de tu app.
+dataFrameColumnsWidth = 100
