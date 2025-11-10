@@ -1,0 +1,494 @@
+import streamlit as st
+import pandas as pd
+from sqlalchemy import create_engine, text
+
+# --- CONEXIÓN A LA BASE DE DATOS ---
+engine = create_engine('sqlite:///fantasy.db')
+
+# --- FUNCIONES DE CACHÉ Y OBTENCIÓN DE DATOS ---
+@st.cache_data(ttl=600)
+def obtener_ligas():
+    """Obtiene la lista de todas las ligas disponibles."""
+    try:
+        df = pd.read_sql("SELECT id, nombre FROM Ligas ORDER BY nombre", engine)
+        return {row['nombre']: row['id'] for index, row in df.iterrows()}
+    except:
+        return {}
+
+@st.cache_data(ttl=600)
+def obtener_jugadores(liga_id):
+    """Obtiene la lista de jugadores de la liga activa."""
+    try:
+        # Se incluye el jugador que tenga 0 puntos en la primera jornada para que aparezca
+        df = pd.read_sql(f"SELECT DISTINCT jugador FROM Puntos WHERE liga_id = {liga_id} ORDER BY jugador", engine)
+        return df['jugador'].tolist()
+    except:
+        return []
+
+@st.cache_data(ttl=600)
+def obtener_max_jornada(liga_id):
+    """Obtiene el número de la última jornada registrada para la liga activa."""
+    try:
+        with engine.connect() as connection:
+            max_j = connection.execute(text(f"SELECT MAX(jornada) FROM Puntos WHERE liga_id = {liga_id}")).scalar()
+            return int(max_j) if max_j else 0
+    except:
+        return 0
+
+def guardar_puntos(liga_id, jugador, jornada, puntos):
+    """Inserta o actualiza los puntos en la BD."""
+    try:
+        with engine.connect() as connection:
+            connection.execute(
+                text("""
+                    INSERT INTO Puntos (liga_id, jugador, jornada, puntos) 
+                    VALUES (:liga_id, :jugador, :jornada, :puntos)
+                    ON CONFLICT(liga_id, jugador, jornada) DO UPDATE SET puntos = :puntos;
+                """),
+                {"liga_id": liga_id, "jugador": jugador, "jornada": jornada, "puntos": puntos}
+            )
+            connection.commit()
+        
+        st.cache_data.clear() 
+        return True
+    except Exception as e:
+        st.error(f"❌ Error al guardar en la BD: {e}")
+        return False
+
+# --- PÁGINAS DE LA APLICACIÓN ---
+
+def gestionar_ligas(ligas_map):
+    st.header("⚙️ Gestión de Ligas")
+    
+    tab1, tab2 = st.tabs(["➕ Crear Liga", "🗑️ Eliminar Liga"])
+
+    with tab1:
+        st.subheader("Crear una Nueva Liga")
+        nombre_liga = st.text_input("Nombre de la Liga (ej: 'Liga Subliga Pago'):")
+        temporada = st.text_input("Temporada (ej: '2025/2026'):")
+        
+        if st.button("Crear Liga"):
+            if nombre_liga and nombre_liga not in ligas_map:
+                try:
+                    with engine.connect() as connection:
+                        connection.execute(text(
+                            "INSERT INTO Ligas (nombre, temporada) VALUES (:nombre, :temporada)"
+                        ), {"nombre": nombre_liga, "temporada": temporada})
+                        connection.commit()
+                    st.cache_data.clear()
+                    st.success(f"¡Liga '{nombre_liga}' creada con éxito!")
+                except Exception as e:
+                    st.error(f"Error al crear la liga: {e}")
+            elif nombre_liga in ligas_map:
+                 st.warning("Esta liga ya existe.")
+            else:
+                st.error("El nombre de la liga no puede estar vacío.")
+
+    with tab2:
+        st.subheader("Eliminar una Liga")
+        liga_a_eliminar_nombre = st.selectbox("Selecciona liga a eliminar (¡Peligro!):", list(ligas_map.keys()))
+        liga_a_eliminar_id = ligas_map.get(liga_a_eliminar_nombre)
+        
+        st.warning("Eliminar una liga borrará TODOS sus jugadores y puntos asociados.")
+        if st.button("🔴 ELIMINAR LIGA PERMANENTEMENTE"):
+            if liga_a_eliminar_id:
+                with engine.connect() as connection:
+                    # Borrar puntos primero (dependientes)
+                    connection.execute(text("DELETE FROM Puntos WHERE liga_id = :id"), {"id": liga_a_eliminar_id})
+                    # Borrar la liga
+                    connection.execute(text("DELETE FROM Ligas WHERE id = :id"), {"id": liga_a_eliminar_id})
+                    connection.commit()
+                st.cache_data.clear()
+                st.success(f"¡La liga '{liga_a_eliminar_nombre}' ha sido eliminada!")
+
+
+def gestionar_jugadores(liga_id):
+    st.header("👤 Gestión de Participantes de la Liga Activa")
+    jugadores_actuales = obtener_jugadores(liga_id)
+    
+    tab1, tab2, tab3 = st.tabs(["➕ Nuevo Jugador", "➖ Eliminar Jugador", "✏️ Renombrar Jugador"])
+
+    with tab1:
+        st.subheader("Crear un Nuevo Jugador")
+        nuevo_nombre = st.text_input("Nombre del nuevo participante:", key="nuevo_jugador_input")
+        
+        if st.button("Crear Jugador", key="btn_crear_jugador"):
+            if nuevo_nombre and nuevo_nombre not in jugadores_actuales:
+                # Insertamos un punto ficticio (0) en la jornada 1 para que aparezca en la lista
+                # Nota: Esto resuelve el problema de que el jugador aparezca en las listas, sin depender del ID inicial.
+                guardar_puntos(liga_id, nuevo_nombre, 1, 0)
+                st.success(f"¡{nuevo_nombre} añadido a la liga!")
+            elif nuevo_nombre in jugadores_actuales:
+                 st.warning("Este jugador ya existe en la liga activa.")
+            else:
+                st.error("El nombre no puede estar vacío.")
+
+    with tab2:
+        st.subheader("Eliminar un Jugador")
+        jugador_a_eliminar = st.selectbox("Selecciona participante a eliminar:", jugadores_actuales, key="jugador_eliminar_select")
+        
+        if st.button("🔴 ELIMINAR PERMANENTEMENTE", help="Borrará todos sus datos de esta liga."):
+            with engine.connect() as connection:
+                connection.execute(text(
+                    "DELETE FROM Puntos WHERE jugador = :j AND liga_id = :id"
+                ), {"j": jugador_a_eliminar, "id": liga_id})
+                connection.commit()
+            st.cache_data.clear()
+            st.success(f"¡{jugador_a_eliminar} y todos sus puntos han sido eliminados de esta liga!")
+
+
+    with tab3:
+        st.subheader("Renombrar un Jugador")
+        
+        col_r1, col_r2 = st.columns(2)
+        with col_r1:
+            jugador_antiguo = st.selectbox("Selecciona jugador a renombrar:", jugadores_actuales, key="jugador_antiguo_select")
+        
+        with col_r2:
+            nuevo_nombre_jugador = st.text_input("Nuevo nombre:", key="nuevo_nombre_jugador_input")
+
+        if st.button("✏️ Renombrar"):
+            if nuevo_nombre_jugador and jugador_antiguo:
+                if nuevo_nombre_jugador in jugadores_actuales:
+                    st.error("Ya existe un jugador con ese nombre.")
+                else:
+                    # Actualiza la columna 'jugador' en la tabla Puntos
+                    with engine.connect() as connection:
+                        connection.execute(text(
+                            "UPDATE Puntos SET jugador = :nuevo WHERE jugador = :antiguo AND liga_id = :id"
+                        ), {"nuevo": nuevo_nombre_jugador, "antiguo": jugador_antiguo, "id": liga_id})
+                        connection.commit()
+                    st.cache_data.clear()
+                    st.success(f"¡{jugador_antiguo} renombrado a {nuevo_nombre_jugador} con éxito!")
+            else:
+                st.error("Debes seleccionar un jugador y proporcionar un nuevo nombre.")
+
+
+def interfaz_entrada_multiple(liga_id, jugadores):
+    st.header("📝 Entrada/Modificación de Puntos")
+    st.markdown("**Modo rápido:** Introduce la jornada y los puntos de todos los jugadores a la vez. El valor **0** es válido.")
+    
+    max_jornada = obtener_max_jornada(liga_id)
+    
+    with st.form("form_puntos_multiple", clear_on_submit=True):
+        
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            jornada_actual = st.number_input(
+                "Jornada a introducir/modificar:", 
+                min_value=1, step=1, 
+                value=max_jornada + 1 if max_jornada > 0 else 1
+            )
+        with col2:
+            st.info(f"Última jornada registrada: **J-{max_jornada}**")
+
+        nuevos_puntos = {}
+        st.subheader(f"Puntos de la Jornada {int(jornada_actual)}")
+        
+        puntos_actuales = {}
+        if jornada_actual:
+             # Obtener los puntos actuales de la jornada y liga para precargar el formulario (para modificación)
+             df_actual = pd.read_sql(f"SELECT jugador, puntos FROM Puntos WHERE liga_id = {liga_id} AND jornada = {int(jornada_actual)}", engine)
+             puntos_actuales = df_actual.set_index('jugador')['puntos'].to_dict()
+        
+        cols = st.columns(3)
+        for i, jugador in enumerate(jugadores):
+            col = cols[i % 3]
+            default_value = puntos_actuales.get(jugador, 0)
+            
+            # Puntos es INTEGER
+            nuevos_puntos[jugador] = col.number_input(
+                f"{jugador}:", 
+                min_value=0, step=1, 
+                value=int(default_value), # Aseguramos que sea entero
+                key=f"puntos_{jugador}_{jornada_actual}"
+            )
+            
+        submitted = st.form_submit_button("💾 GUARDAR/MODIFICAR PUNTOS DE LA JORNADA")
+        
+        if submitted:
+            exito = True
+            for jugador, puntos in nuevos_puntos.items():
+                if not guardar_puntos(liga_id, jugador, int(jornada_actual), int(puntos)):
+                    exito = False
+                    break
+            
+            if exito:
+                st.success(f"✅ ¡Puntos de la Jornada {int(jornada_actual)} guardados/modificados con éxito!")
+
+
+def interfaz_rendimiento_jugador(liga_id, jugadores):
+    st.header("🧠 Rendimiento Individual y Estadísticas")
+    
+    # 1. CONSULTA DE FRECUENCIA DE PUNTOS CON DETALLE
+    st.subheader("1. Frecuencia de Puntos y Jornadas Detalladas")
+    st.markdown("Busca cuántas veces un jugador ha cumplido un criterio de puntuación y qué jornadas fueron.")
+    
+    colA, colB, colC = st.columns([2, 1, 1])
+    
+    with colA:
+        jugador_sel = st.selectbox("Selecciona Participante:", jugadores, key="jug_rend")
+        
+    with colB:
+        operador = st.selectbox("Operador:", ["> Mayor que", "< Menor que", "= Igual a"], key="op_rend")
+        op_simbolo = operador.split(' ')[0] # Extraer solo el >, < o =
+        
+    with colC:
+        puntos_crit = st.number_input("Puntos de Criterio (X):", min_value=0, step=1, value=50, key="pts_rend")
+        
+    if jugador_sel and st.button("Buscar Rendimiento", key="btn_buscar_rendimiento"):
+        
+        # 1a. Consulta para OBTENER EL DETALLE de las jornadas
+        consulta_detalle = f"""
+            SELECT 
+                jugador, 
+                jornada, 
+                puntos 
+            FROM Puntos 
+            WHERE liga_id = {liga_id}
+            AND jugador = '{jugador_sel}'
+            AND puntos {op_simbolo} {int(puntos_crit)}
+            ORDER BY jornada ASC;
+        """
+        df_detalle = pd.read_sql(consulta_detalle, engine)
+        
+        # 1b. Obtener el total de jornadas (igual al número de filas en el detalle)
+        resultado = len(df_detalle)
+        
+        # Mostrar el resultado resumido
+        st.success(f"**{jugador_sel}** ha conseguido **{resultado}** jornadas con **{operador} {int(puntos_crit)} puntos**.")
+
+        # Mostrar la tabla con el detalle (si hay resultados)
+        if not df_detalle.empty:
+            st.markdown("##### Jornadas que cumplen el criterio:")
+            st.dataframe(
+                df_detalle.rename(columns={'jornada': 'Jornada', 'puntos': 'Puntos'}), 
+                use_container_width=True, 
+                hide_index=True,
+                column_order=("Jornada", "Puntos") # Quitamos la columna 'jugador' que es obvia
+            )
+        else:
+            st.info("No se encontraron jornadas que cumplan este criterio.")
+
+
+    # 2. CONSULTA INTERESANTE: JORNADA DE ORO
+    st.markdown("---")
+    st.subheader("2. Jornada de Oro (Récord de la Liga)")
+    
+    df_record = pd.read_sql(f"""
+        SELECT 
+            jugador, 
+            jornada, 
+            puntos 
+        FROM Puntos 
+        WHERE liga_id = {liga_id} 
+        ORDER BY puntos DESC 
+        LIMIT 5;
+    """, engine)
+    
+    if not df_record.empty:
+        mejor_jugador = df_record.iloc[0]['jugador']
+        mejor_puntos = df_record.iloc[0]['puntos']
+        mejor_jornada = df_record.iloc[0]['jornada']
+        
+        st.metric(
+            label="Mejor Puntuación Histórica", 
+            value=f"{int(mejor_puntos)} puntos", 
+            delta=f"Logrado por {mejor_jugador} en la J-{int(mejor_jornada)}"
+        )
+        
+        st.info("Top 5 Puntuaciones Individuales:")
+        st.dataframe(df_record, use_container_width=True, hide_index=True)
+
+
+def interfaz_pivote_completo(liga_id):
+    st.header("📋 Tabla Detallada de Puntos")
+    st.markdown("Visualización de todos los jugadores y sus puntos por jornada en la liga activa.")
+    
+    # 1. Traer todos los puntos de la liga
+    df_long = pd.read_sql(f"""
+        SELECT 
+            jugador, 
+            jornada, 
+            puntos 
+        FROM Puntos 
+        WHERE liga_id = {liga_id}
+        ORDER BY jornada ASC
+    """, engine)
+    
+    if df_long.empty:
+        st.warning("No hay datos de puntos en esta liga.")
+        return
+
+    # 2. Pivotar el DataFrame (de formato largo a formato ancho)
+    # Índice: Jugador
+    # Columnas: Jornada
+    # Valores: Puntos
+    df_pivot = df_long.pivot(index='jugador', columns='jornada', values='puntos').fillna(0).astype(int)
+
+    # 3. Calcular la columna de Totales
+    df_pivot['TOTAL'] = df_pivot.sum(axis=1)
+    
+    # 4. Ordenar por la columna TOTAL (clasificación)
+    df_pivot = df_pivot.sort_values(by='TOTAL', ascending=False)
+    
+    # 5. Renombrar las columnas de jornada
+    df_pivot.columns = [f"J{col}" if isinstance(col, (int, float)) and col != 'TOTAL' else col for col in df_pivot.columns]
+    
+    st.dataframe(df_pivot, use_container_width=True)
+
+
+def interfaz_consultas(liga_id):
+    # Muestra la clasificación general y por rango
+    st.header("📊 Clasificación y Estadísticas")
+    
+    # 1. CLASIFICACIÓN GENERAL (TOTAL)
+    st.subheader("1. Clasificación General")
+    df_puntos_total = pd.read_sql(f"""
+        SELECT 
+            jugador, 
+            SUM(puntos) as "Puntos Totales", 
+            COUNT(DISTINCT jornada) as "Jornadas Jugadas",
+            ROUND(CAST(SUM(puntos) AS REAL) / COUNT(DISTINCT jornada), 2) as "Media/Jornada"
+        FROM Puntos 
+        WHERE liga_id = {liga_id}
+        GROUP BY jugador 
+        ORDER BY "Puntos Totales" DESC
+    """, engine)
+    st.dataframe(df_puntos_total, use_container_width=True, hide_index=True) 
+    st.bar_chart(df_puntos_total.set_index('jugador')['Puntos Totales'])
+    
+    # 2. CONSULTA PERSONALIZADA POR RANGO DE JORNADAS
+    st.markdown("---")
+    st.subheader("2. Clasificación por Rango de Jornadas")
+    
+    max_jornada = obtener_max_jornada(liga_id)
+    
+    if max_jornada > 0:
+        
+        colA, colB = st.columns(2)
+        with colA:
+            j_inicio = st.number_input("Jornada Inicial (incluida):", min_value=1, max_value=max_jornada, value=1, key="j_inicio_rango")
+        with colB:
+            j_fin = st.number_input("Jornada Final (incluida):", min_value=1, max_value=max_jornada, value=max_jornada, key="j_fin_rango")
+
+        if j_inicio <= j_fin:
+            # Consulta SQL dinámica
+            df_rango = pd.read_sql(f"""
+                SELECT 
+                    jugador, 
+                    SUM(puntos) as "Puntos en el Rango",
+                    COUNT(DISTINCT jornada) as "Jornadas Contadas"
+                FROM Puntos 
+                WHERE liga_id = {liga_id} AND jornada BETWEEN {int(j_inicio)} AND {int(j_fin)}
+                GROUP BY jugador 
+                ORDER BY "Puntos en el Rango" DESC
+            """, engine)
+            
+            st.dataframe(df_rango, use_container_width=True, hide_index=True)
+            st.bar_chart(df_rango.set_index('jugador')['Puntos en el Rango'])
+        else:
+            st.warning("La Jornada Inicial debe ser menor o igual que la Jornada Final.")
+    else:
+        st.info("No hay datos de jornadas para mostrar rangos.")
+
+    # 3. MEDIA DE PUNTOS DE LA LIGA POR JORNADA
+    st.markdown("---")
+    st.subheader("3. Evolución de la Media de Puntos de la Liga")
+    
+    df_media = pd.read_sql(f"""
+        SELECT 
+            jornada, 
+            ROUND(AVG(puntos), 2) as "Media de la Jornada"
+        FROM Puntos 
+        WHERE liga_id = {liga_id}
+        GROUP BY jornada 
+        ORDER BY jornada ASC
+    """, engine)
+    
+    if not df_media.empty:
+        st.dataframe(df_media, use_container_width=True, hide_index=True)
+        st.line_chart(df_media.set_index('jornada')['Media de la Jornada'])
+    else:
+        st.info("No hay suficientes datos para calcular la media por jornada.")
+
+
+# --- PÁGINA PRINCIPAL ---
+def interfaz_home(ligas_map):
+    st.header("🏠 Pantalla Principal: Tus Ligas Fantasy")
+    
+    if not ligas_map:
+        st.warning("Actualmente no tienes ligas registradas. Ve a la sección 'Gestión de Ligas' en el menú lateral para crear la primera.")
+        return None
+
+    st.info("Selecciona una liga para ver sus opciones en el menú de navegación.")
+    
+    # Crea una tabla resumen de las ligas
+    df_ligas = pd.DataFrame([{'Nombre de la Liga': nombre, 'ID': id} for nombre, id in ligas_map.items()])
+    st.dataframe(df_ligas, use_container_width=True, hide_index=True)
+    
+    # El selector de liga se mantiene en el sidebar
+
+
+# --- ESTRUCTURA PRINCIPAL DE LA APP ---
+def main():
+    st.set_page_config(layout="wide", page_title="Gestor Fantasy", initial_sidebar_state="expanded")
+    
+    st.title("⚽🏆 Gestor de Puntos Liga Fantasy")
+    
+    ligas_map = obtener_ligas()
+    
+    liga_id_activa = None
+    jugadores = []
+
+    # 1. Selector de Liga Activa en el Sidebar
+    if ligas_map:
+        nombre_liga_activa = st.sidebar.selectbox("🎯 Liga Activa:", list(ligas_map.keys()), key="liga_select")
+        liga_id_activa = ligas_map[nombre_liga_activa]
+        st.sidebar.markdown(f"**{nombre_liga_activa}** (ID: {liga_id_activa})")
+        jugadores = obtener_jugadores(liga_id_activa)
+    else:
+        st.sidebar.warning("No hay ligas. Ve a 'Gestión de Ligas'.")
+
+    # 2. Menú de Navegación (Se añade "Tabla Completa")
+    menu = ["Home", "Entrada de Puntos", "Clasificación", "Rendimiento Individual", "Tabla Completa", "Gestión de Participantes", "Gestión de Ligas"]
+    choice = st.sidebar.selectbox("Menú de Navegación:", menu)
+
+    # 3. Renderizado de Páginas
+    
+    if choice == "Home":
+        interfaz_home(ligas_map)
+        
+    elif choice == "Gestión de Ligas":
+        gestionar_ligas(ligas_map)
+        
+    elif liga_id_activa is None:
+        st.warning("Selecciona una liga en el menú lateral para acceder a estas opciones.")
+
+    elif choice == "Gestión de Participantes":
+        gestionar_jugadores(liga_id_activa)
+        
+    elif choice == "Rendimiento Individual":
+        if jugadores:
+            interfaz_rendimiento_jugador(liga_id_activa, jugadores)
+        else:
+            st.warning("Añade jugadores primero.")
+            
+    elif choice == "Clasificación":
+        interfaz_consultas(liga_id_activa)
+        
+    # Nueva Opción de Menú
+    elif choice == "Tabla Completa":
+        if liga_id_activa:
+            interfaz_pivote_completo(liga_id_activa)
+        else:
+            st.warning("Selecciona una liga.")
+            
+    elif choice == "Entrada de Puntos":
+        if jugadores:
+            interfaz_entrada_multiple(liga_id_activa, jugadores)
+        else:
+            st.warning("Añade jugadores primero en la sección 'Gestión de Participantes'.")
+
+if __name__ == '__main__':
+    main()

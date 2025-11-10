@@ -1,0 +1,77 @@
+App para gestión de liga Fantasy
+
+Creado con streamlite (interfaz gráfica, visualización), sqlite (base de datos) y Python (ñenguaje de programación)
+
+Para hacer funcionar la app hay que tener descargadas las dependencias:
+
+- pip install pandas streamlit sqlalchemy
+
+Utilizando VScode para programar, descargar:
+
+- Python
+- SQLite
+- SQLite Viewer (para visualizar la Base de Datos)
+
+Para iniciar la app:
+
+La primera vez:
+
+- Copiar código del repositorio
+- Abrir máquina virtual
+    # Crea el entorno virtual
+    - python -m venv venv 
+    # Activa el entorno virtual (si estás en Windows)
+    .\venv\Scripts\activate 
+    # Activa el entorno virtual (si estás en macOS/Linux)
+    - source venv/bin/activate
+- python db_setup.py (esto creará la bd)
+- python import_data.py (si tienes datos en formato .csv y quieres importar en vez de añadir todos manualmente)
+- streamlit run app.py
+
+Después ya solo hacer:
+
+- .\venv\Scripts\activate
+- streamlit run app.py
+
+
+Opciones para que la pueda ver otra persona:
+1. Usar entorno virtual para la edición:
+- Comprimir toda la carpeta del proyecto (incluyendo app.py, db_setup.py, import_data.py, requirements.txt, y fantasy.db).
+- Pasar el archivo comprimido.
+- Descomprimir la carpeta.
+- Crear el Entorno Virtual: python -m venv venv
+- Activar el Entorno: .\venv\Scripts\activate
+- Instalar dependencias: pip install -r requirements.txt
+- Ejecutar: streamlit run app.py
+
+2. Desplegar en Streamlit Community Cloud
+- Requisitos
+    - Repositorio de GitHub: Necesitas subir todo tu proyecto (app.py, import_data.py, fantasy.db, y el entorno virtual venv NO, pero sí el archivo de dependencias) a un repositorio público en GitHub.
+
+- Archivo de Dependencias (requirements.txt): Streamlit Cloud necesita saber qué librerías instalar.
+
+- Pasos para el Despliegue
+    A. Crear el Archivo requirements.txt
+    En tu Terminal (con venv activo), ejecuta este comando para crear el archivo que lista todas las dependencias:
+
+    pip freeze > requirements.txt
+
+    B. Subir el Proyecto a GitHub
+    Crea una cuenta en GitHub si no tienes una.
+
+    Crea un nuevo repositorio público (ej: FantasyApp).
+
+    Sube todos tus archivos ese repositora io:
+
+    C. Desplegar en Streamlit Cloud
+    Ve a Streamlit Community Cloud (share.streamlit.io).
+
+    Inicia sesión con tu cuenta de GitHub.
+
+    Haz clic en "New App" o en el botón para desplegar.
+
+    Selecciona tu repositorio, la rama principal (main) y el archivo principal (app.py).
+
+    Haz clic en "Deploy!".
+
+    Streamlit Cloud leerá tu requirements.txt, instalará las dependencias y lanzará tu aplicación. Una vez que esté lista, obtendrás un enlace único (ej: https://[tu-nombre].streamlit.app/[nombre-app]) que puedes compartir con tu amigo para que acceda y la use.
