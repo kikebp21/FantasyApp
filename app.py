@@ -165,7 +165,7 @@ def gestionar_jugadores(liga_id, nombre_liga):
 
 
 def interfaz_entrada_multiple(liga_id, jugadores):
-    st.header("📝 Entrada/Modificación de Puntos")
+    st.subheader("➕ Entrada/Modificación de Puntos")
     st.markdown("**Modo rápido:** Introduce la jornada y los puntos de todos los jugadores a la vez. El valor **0** es válido.")
     
     max_jornada = obtener_max_jornada(liga_id)
@@ -329,13 +329,23 @@ def interfaz_pivote_completo(liga_id, nombre_liga):
     # 3. Calcular la columna de Totales
     df_pivot['TOTAL'] = df_pivot.sum(axis=1)
     
-    # 4. Ordenar por la columna TOTAL (clasificación)
-    df_pivot = df_pivot.sort_values(by='TOTAL', ascending=False)
+    # 4. Convertir el índice (Jugadores) en una columna regular. 
+    #    Esto fuerza a Streamlit a renderizar los nombres como datos y no como índice, 
+    #    solucionando el problema de color.
+    df_final = df_pivot.reset_index()
+
+    # 5. Ordenar por la columna TOTAL (clasificación)
+    df_final = df_final.sort_values(by='TOTAL', ascending=False)
     
-    # 5. Renombrar las columnas de jornada
-    df_pivot.columns = [f"J{col}" if isinstance(col, (int, float)) and col != 'TOTAL' else col for col in df_pivot.columns]
+    # 6. Renombrar las columnas de jornada
+    # Nota: Aplicamos el renombramiento a df_final, que ahora incluye 'jugador'
+    df_final.columns = [f"J{col}" if isinstance(col, (int, float)) and col != 'TOTAL' else col for col in df_final.columns]
     
-    st.dataframe(df_pivot, use_container_width=True)
+    # 7. Renombrar la columna 'jugador' para mejor visualización
+    df_final = df_final.rename(columns={'jugador': 'Jugador'})
+    
+    # Mostrar el DataFrame final (sin el índice por defecto)
+    st.dataframe(df_final, use_container_width=True, hide_index=True)
 
 
 def interfaz_consultas(liga_id):
@@ -431,6 +441,116 @@ def interfaz_home(ligas_map):
     # El selector de liga se mantiene en el sidebar
 
 
+# --- NUEVAS FUNCIONES DE GESTIÓN DE PUNTOS ---
+def guardar_punto_individual(liga_id, jugador, jornada, puntos):
+    """Actualiza los puntos de un jugador/jornada. Si el registro no existe, lo crea."""
+    with engine.connect() as connection:
+        # 1. Intentar actualizar el registro existente
+        # Esto funciona para correcciones de puntos ya existentes
+        update_result = connection.execute(text(
+            "UPDATE Puntos SET puntos = :puntos WHERE liga_id = :id AND jugador = :jugador AND jornada = :jornada"
+        ), {"puntos": puntos, "id": liga_id, "jugador": jugador, "jornada": jornada})
+        
+        # 2. Si no se actualizó ninguna fila (registro no existía), insertamos uno nuevo
+        # Esto funciona para jugadores olvidados en la entrada original
+        if update_result.rowcount == 0:
+            connection.execute(text(
+                "INSERT INTO Puntos (liga_id, jugador, jornada, puntos) VALUES (:id, :jugador, :jornada, :puntos)"
+            ), {"id": liga_id, "jugador": jugador, "jornada": jornada, "puntos": puntos})
+            
+        connection.commit()
+    st.cache_data.clear()
+
+
+def interfaz_entrada_individual(liga_id, jugadores):
+    """Interfaz para añadir/modificar puntos de un único jugador en una jornada."""
+    st.subheader("✏️ Modificar Puntos de un Jugador Específico")
+    st.markdown("Utiliza esta opción para corregir puntos o añadir jugadores que se te olvidaron, sin afectar al resto.")
+
+    max_jornada = obtener_max_jornada(liga_id)
+    # Sugerir la siguiente jornada
+    jornada_default = max(1, max_jornada + 1)
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        jugador_sel = st.selectbox("Participante:", jugadores, key="jug_indiv_sel")
+    with col2:
+        jornada_sel = st.number_input("Jornada:", min_value=1, step=1, value=jornada_default, key="jornada_indiv_sel")
+    with col3:
+        current_points = 0
+        # Intentar obtener puntos actuales para precargar el campo (si existen)
+        if jornada_sel > 0 and jugador_sel:
+            with engine.connect() as connection:
+                current_points = connection.execute(text(
+                    "SELECT puntos FROM Puntos WHERE liga_id = :id AND jugador = :jugador AND jornada = :jornada"
+                ), {"id": liga_id, "jugador": jugador_sel, "jornada": jornada_sel}).scalar()
+            # Si no hay puntos, usamos 0
+            current_points = current_points if current_points is not None else 0
+
+        puntos_sel = st.number_input("Puntos:", min_value=0, step=1, value=current_points, key="puntos_indiv_sel")
+
+    if st.button("Guardar/Actualizar Punto Individual", key="btn_save_indiv"):
+        if jugador_sel and jornada_sel >= 1 and puntos_sel >= 0:
+            guardar_punto_individual(liga_id, jugador_sel, jornada_sel, puntos_sel)
+            st.success(f"✅ Puntos de {jugador_sel} actualizados a {int(puntos_sel)} en Jornada {int(jornada_sel)}.")
+            
+        else:
+            st.error("Por favor, verifica los datos de la jornada y puntos.")
+
+
+def interfaz_eliminar_jornada(liga_id):
+    """Interfaz para eliminar todos los puntos de una jornada."""
+    st.subheader("🗑️ Eliminar Puntos de una Jornada Completa")
+    st.markdown("Esta acción **eliminará permanentemente** todos los puntos de la jornada seleccionada para todos los participantes.")
+    
+    max_jornada = obtener_max_jornada(liga_id)
+
+    if max_jornada == 0:
+        st.info("Aún no hay puntos registrados en esta liga.")
+        return
+
+    # Obtener todas las jornadas registradas para el selectbox
+    with engine.connect() as connection:
+        jornadas_registradas = connection.execute(text(
+            f"SELECT DISTINCT jornada FROM Puntos WHERE liga_id = {liga_id} ORDER BY jornada DESC"
+        )).scalars().all()
+    
+    jornada_a_eliminar = st.selectbox(
+        "Selecciona la jornada a eliminar:", 
+        jornadas_registradas,
+        key="jornada_elim_select"
+    )
+
+    if st.button(f"🔴 CONFIRMAR ELIMINACIÓN DE JORNADA {jornada_a_eliminar}"):
+        with engine.connect() as connection:
+            connection.execute(text(
+                "DELETE FROM Puntos WHERE liga_id = :id AND jornada = :jornada"
+            ), {"id": liga_id, "jornada": jornada_a_eliminar})
+            connection.commit()
+        st.cache_data.clear()
+        st.success(f"✅ ¡Jornada {jornada_a_eliminar} eliminada completamente!")
+        st.rerun() # Recarga la página para actualizar las listas de jornadas
+
+
+def interfaz_gestion_puntos(liga_id, jugadores):
+    """Wrapper que contiene todas las opciones de gestión de puntos."""
+    st.header("📝 Gestión de Puntos de Jornada")
+    
+    # Usamos tabs para organizar las tres funcionalidades
+    tab1, tab2, tab3 = st.tabs(["➕ Entrada Múltiple", "✏️ Entrada Individual", "🗑️ Eliminar Jornada"])
+
+    with tab1:
+        # Llamamos a tu función original para entrada masiva
+        interfaz_entrada_multiple(liga_id, jugadores) 
+    with tab2:
+        # Nueva entrada individual
+        interfaz_entrada_individual(liga_id, jugadores) 
+    with tab3:
+        # Nueva eliminación por jornada
+        interfaz_eliminar_jornada(liga_id)
+
+
 # --- ESTRUCTURA PRINCIPAL DE LA APP ---
 def main():
     st.set_page_config(layout="wide", page_title="Gestor Fantasy", initial_sidebar_state="expanded")
@@ -457,7 +577,7 @@ def main():
         st.sidebar.warning("No hay ligas. Ve a 'Gestión de Ligas'.")
 
     # 2. Menú de Navegación (Se añade "Tabla Completa")
-    menu = ["Home", "Entrada de Puntos", "Clasificación", "Rendimiento Individual", "Tabla Completa", "Gestión de Participantes", "Gestión de Ligas"]
+    menu = ["Home", "Clasificación", "Rendimiento Individual", "Tabla Completa", "Gestión de Puntos", "Gestión de Participantes", "Gestión de Ligas"]
     choice = st.sidebar.selectbox("Menú de Navegación:", menu)
 
     # 3. Renderizado de Páginas
@@ -490,11 +610,14 @@ def main():
         else:
             st.warning("Selecciona una liga.")
             
-    elif choice == "Entrada de Puntos":
-        if jugadores:
-            interfaz_entrada_multiple(liga_id_activa, jugadores)
+    elif choice == "Gestión de Puntos":
+        if liga_id_activa:
+            if jugadores:
+                interfaz_gestion_puntos(liga_id_activa, jugadores) 
+            else:
+                st.warning("Añade jugadores primero en la sección 'Gestión de Participantes'.")
         else:
-            st.warning("Añade jugadores primero en la sección 'Gestión de Participantes'.")
+            st.warning("Selecciona o crea una liga primero.")
 
 if __name__ == '__main__':
     main()
