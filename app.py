@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
+import streamlit_authenticator as stauth
+from config import USER_CONFIG # Importamos la configuración de roles/usuarios
 
 # --- CONEXIÓN A LA BASE DE DATOS ---
 engine = create_engine('sqlite:///fantasy.db')
@@ -14,6 +16,20 @@ def obtener_ligas():
         return {row['nombre']: row['id'] for index, row in df.iterrows()}
     except:
         return {}
+    
+# Cuenta los participantes directamente desde la base de datos
+@st.cache_data(ttl=600)
+def contar_participantes_por_liga(liga_id):
+    """Obtiene el número de participantes (jugadores) en una liga."""
+    try:
+        # Consulta SQL optimizada para contar jugadores distintos
+        query = f"SELECT COUNT(DISTINCT jugador) FROM Puntos WHERE liga_id = {liga_id}"
+        count = pd.read_sql(query, engine).iloc[0, 0]
+        return int(count)
+    except Exception as e:
+        # Maneja el caso donde la liga_id no existe o la tabla está vacía
+        # st.error(f"Error al contar participantes: {e}") # Puedes descomentar esto para debug
+        return 0
 
 @st.cache_data(ttl=600)
 def obtener_jugadores(liga_id):
@@ -425,7 +441,9 @@ def interfaz_consultas(liga_id):
 
 # --- PÁGINA PRINCIPAL ---
 def interfaz_home(ligas_map):
-    # st.header("🏠 Pantalla Principal: Tus Ligas Fantasy")
+    # Asumimos que el user_role está disponible en st.session_state
+    user_role = st.session_state.get('user_role', 'User') 
+
     st.markdown("## TUS LIGAS <span style='color:#FF4B4B;'>FANTASY</span>", unsafe_allow_html=True)
     
     if not ligas_map:
@@ -434,12 +452,46 @@ def interfaz_home(ligas_map):
 
     st.info("Selecciona una liga para ver sus opciones en el menú de navegación.")
     
-    # Crea una tabla resumen de las ligas
-    df_ligas = pd.DataFrame([{'Nombre de la Liga': nombre, 'ID': id} for nombre, id in ligas_map.items()])
-    st.dataframe(df_ligas, use_container_width=True, hide_index=True)
+    # Construir la lista de ligas con el conteo de participantes
+    
+    datos_ligas = []
+    for nombre, id_liga in ligas_map.items():
+        # Llamamos a la función optimizada para obtener el conteo
+        num_participantes = contar_participantes_por_liga(id_liga)
+        
+        # Lógica Condicional: Mostrar el ID solo si el rol es Admin
+        id_display = id_liga if user_role == 'Admin' else 'Oculto'
+        
+        datos_ligas.append({
+            'Nombre': nombre,
+            'ID': id_display, # Aquí usamos el valor condicional
+            'Participantes': num_participantes
+        })
+    
+    # Crea el DataFrame final
+    df_ligas = pd.DataFrame(datos_ligas)
+
+    # Mostrar el resumen en un formato de tabla limpio
+
+    # Renombrar columnas para la presentación final
+    df_presentacion = df_ligas.rename(columns={
+        'Nombre': 'Nombre de la Liga',
+        'Participantes': '👥 Participantes'
+    })
+    
+    # Si no es Admin, ocultamos completamente la columna ID del DataFrame
+    if user_role != 'Admin':
+        df_presentacion = df_presentacion.drop(columns=['ID'])
+    
+    st.dataframe(
+        df_presentacion, 
+        use_container_width=True, 
+        hide_index=True,
+        # Ordenar columnas (quitamos 'ID' si el usuario no es Admin, Streamlit lo maneja)
+        column_order=['Nombre de la Liga', '👥 Participantes', 'ID'] if user_role == 'Admin' else ['Nombre de la Liga', '👥 Participantes']
+    )
     
     # El selector de liga se mantiene en el sidebar
-
 
 # --- NUEVAS FUNCIONES DE GESTIÓN DE PUNTOS ---
 def guardar_punto_individual(liga_id, jugador, jornada, puntos):
@@ -555,69 +607,187 @@ def interfaz_gestion_puntos(liga_id, jugadores):
 def main():
     st.set_page_config(layout="wide", page_title="Gestor Fantasy", initial_sidebar_state="expanded")
     
-    # st.title("⚽🏆 Gestor de Puntos Liga Fantasy")
+    # Inicializar el estado de la sesión si es la primera carga
+    if 'authentication_status' not in st.session_state:
+        st.session_state['authentication_status'] = None
+        st.session_state['username'] = None
+        st.session_state['name'] = None
+        st.session_state['user_role'] = None
+
+    # -----------------------------------------------------
+    # ENCABEZADO PERSONALIZADO
+    # -----------------------------------------------------
     st.markdown("""
         <div style='text-align: center;'>
-            <h1>GESTOR DE PUNTOS LIGA <span style='color:#FF4B4B;'>FANTASY</span></h1>
+            <h1 style='margin: 0;'>GESTOR DE LIGAS <span style='color:#FF4B4B;'>FANTASY</span></h1>
         </div>
     """, unsafe_allow_html=True)
-
-    ligas_map = obtener_ligas()
     
-    liga_id_activa = None
-    jugadores = []
+    # -----------------------------------------------------
+    # AUTENTICACIÓN Y ROLES
+    # -----------------------------------------------------
+    authenticator = stauth.Authenticate(
+        USER_CONFIG['credentials'],
+        USER_CONFIG['cookie']['name'],
+        USER_CONFIG['cookie']['key'],
+        USER_CONFIG['cookie']['expiry_days']
+    )
 
-    # 1. Selector de Liga Activa en el Sidebar
-    if ligas_map:
-        nombre_liga_activa = st.sidebar.selectbox("🎯 Liga Activa:", list(ligas_map.keys()), key="liga_select")
-        liga_id_activa = ligas_map[nombre_liga_activa]
-        st.sidebar.markdown(f"**{nombre_liga_activa}** (ID: {liga_id_activa})")
-        jugadores = obtener_jugadores(liga_id_activa)
-    else:
-        st.sidebar.warning("No hay ligas. Ve a 'Gestión de Ligas'.")
-
-    # 2. Menú de Navegación (Se añade "Tabla Completa")
-    menu = ["Home", "Clasificación", "Rendimiento Individual", "Tabla Completa", "Gestión de Puntos", "Gestión de Participantes", "Gestión de Ligas"]
-    choice = st.sidebar.selectbox("Menú de Navegación:", menu)
-
-    # 3. Renderizado de Páginas
+    # -----------------------------------------------------
+    # LÓGICA DE LOGIN O CONTENIDO
+    # -----------------------------------------------------
     
-    if choice == "Home":
-        interfaz_home(ligas_map)
+    if st.session_state['authentication_status']:
+        # **********************************************
+        # 1. USUARIO AUTENTICADO: RENDERIZAR LA APP COMPLETA
+        # **********************************************
         
-    elif choice == "Gestión de Ligas":
-        gestionar_ligas(ligas_map)
-        
-    elif liga_id_activa is None:
-        st.warning("Selecciona una liga en el menú lateral para acceder a estas opciones.")
+        # Obtener datos de sesión
+        name = st.session_state['name']
+        user_role = st.session_state['user_role']
+        username = st.session_state['username'] # Añadido para buscar ligas permitidas
 
-    elif choice == "Gestión de Participantes":
-        gestionar_jugadores(liga_id_activa, nombre_liga_activa)
+        # 1. Configurar el sidebar y logout
+        authenticator.logout('Logout', 'sidebar')
+        st.sidebar.markdown(f"<p style='font-size: small; margin-top: 0.5rem;'>Rol: <strong>{user_role}</strong></p>", unsafe_allow_html=True)
+
+        # 2. Cargar todas las ligas
+        todas_las_ligas_map = obtener_ligas()
         
-    elif choice == "Rendimiento Individual":
-        if jugadores:
-            interfaz_rendimiento_jugador(liga_id_activa, jugadores)
-        else:
-            st.warning("Añade jugadores primero.")
+        # OBTENER LIGAS PERMITIDAS SEGÚN EL ROL Y ASIGNACIÓN
+        ligas_permitidas = todas_las_ligas_map.copy()
+
+        # Si el usuario NO es Admin, filtar por las ligas asignadas en config.py
+        if user_role != 'Admin':
+            # Obtener la lista de ligas permitidas para el usuario
+            allowed_names = USER_CONFIG['credentials']['usernames'][username]['allowed_leagues']
             
-    elif choice == "Clasificación":
-        interfaz_consultas(liga_id_activa)
+            # Filtrar el mapa de ligas
+            ligas_permitidas = {
+                nombre: id_liga
+                for nombre, id_liga in todas_las_ligas_map.items()
+                if nombre in allowed_names
+            }
+
+        ligas_map = ligas_permitidas
+        liga_id_activa = None
+        jugadores = []
+
+        # 3. Selector de Liga Activa en el Sidebar
+        nombre_liga_activa = ""
+        if ligas_map:
+            # Si solo hay una liga asignada, la seleccionamos automáticamente.
+            # Si hay varias, mostramos el selectbox.
+            
+            nombre_liga_activa = st.sidebar.selectbox("🎯 Liga Activa:", list(ligas_map.keys()), key="liga_select")
+            liga_id_activa = ligas_map[nombre_liga_activa]
+            if user_role == 'Admin':
+                st.sidebar.markdown(f"**{nombre_liga_activa}** (ID: {liga_id_activa})")
+            else:
+                # Mostrar solo el nombre si no es Admin
+                st.sidebar.markdown(f"**{nombre_liga_activa}**")
+            jugadores = obtener_jugadores(liga_id_activa)
+        else:
+            st.sidebar.warning("No hay ligas. Crea una en 'Gestión de Ligas'.")
+
+        # 4. Menú de Navegación (Depende del rol)
+        menu_base = ["Home", "Clasificación", "Rendimiento Individual", "Tabla Completa"]
         
-    # Nueva Opción de Menú
-    elif choice == "Tabla Completa":
-        if liga_id_activa:
-            interfaz_pivote_completo(liga_id_activa, nombre_liga_activa)
+        # Añadir opciones sensibles solo si es Admin
+        if user_role == 'Admin':
+            menu_admin = ["Gestión de Puntos", "Gestión de Participantes", "Gestión de Ligas"]
+            menu = menu_base + menu_admin
         else:
-            st.warning("Selecciona una liga.")
+            menu = menu_base
             
-    elif choice == "Gestión de Puntos":
-        if liga_id_activa:
+        choice = st.sidebar.selectbox("Menú de Navegación:", menu)
+
+        # 5. Renderizado de Páginas (Depende del rol y la selección)
+        
+        if choice == "Home":
+            st.markdown(f"## 👋 Bienvenido, {name}")
+            st.markdown(f"**Tu Rol:** `{user_role}`")
+            
+            if ligas_map:
+                interfaz_home(ligas_map)
+            else:
+                 st.info("¡Bienvenido! Como no hay ligas creadas, el administrador debe ir a 'Gestión de Ligas' para empezar.")
+            
+        elif choice == "Gestión de Ligas" and user_role == 'Admin':
+            gestionar_ligas(ligas_map)
+            
+        elif liga_id_activa is None and choice != "Gestión de Ligas":
+            st.warning("Selecciona una liga en el menú lateral para acceder a estas opciones.")
+                 
+        # Opciones protegidas para ADMIN
+        elif user_role != 'Admin' and choice in ["Gestión de Puntos", "Gestión de Participantes", "Gestión de Ligas"]:
+            st.error("🚨 Acceso Denegado. Solo los administradores pueden acceder a la gestión de datos.")
+            
+        # Opciones disponibles para todos (Admin y User)
+        elif choice == "Clasificación":
+            interfaz_consultas(liga_id_activa)
+            
+        elif choice == "Rendimiento Individual":
+            if jugadores:
+                interfaz_rendimiento_jugador(liga_id_activa, jugadores)
+            else:
+                st.warning("Añade jugadores primero.")
+                
+        elif choice == "Tabla Completa":
+            if liga_id_activa:
+                interfaz_pivote_completo(liga_id_activa, nombre_liga_activa)
+            else:
+                st.warning("Selecciona una liga.")
+                
+        # Opciones de Admin
+        elif choice == "Gestión de Puntos":
             if jugadores:
                 interfaz_gestion_puntos(liga_id_activa, jugadores) 
             else:
                 st.warning("Añade jugadores primero en la sección 'Gestión de Participantes'.")
-        else:
-            st.warning("Selecciona o crea una liga primero.")
+                
+        elif choice == "Gestión de Participantes":
+            gestionar_jugadores(liga_id_activa, nombre_liga_activa)
+    
+    else:
+        # **********************************************
+        # 2. USUARIO NO AUTENTICADO: MOSTRAR FORMULARIO DE LOGIN
+        # **********************************************
+        
+        # Se muestra solo el login, en el main, sin usar el sidebar
+        col1, col2, col3 = st.columns([1,2,1])
+        
+        with col2:
+            st.header("🔐 Acceso Restringido")
+            
+            with st.form(key='login_form', clear_on_submit=False):
+                st.subheader("Ingresa tus credenciales")
+                
+                login_username = st.text_input('Usuario', key='login_user')
+                login_password = st.text_input('Contraseña', type='password', key='login_pass')
+                
+                if st.form_submit_button('Entrar'):
+                    # Buscar credenciales en la configuración
+                    if login_username in USER_CONFIG['credentials']['usernames']:
+                        
+                        user_info = USER_CONFIG['credentials']['usernames'][login_username]
+                        hashed_password = user_info['password']
+                        
+                        # Validar la contraseña usando el Hasher (requiere que el Hasher esté correctamente hasheado)
+                        if stauth.Hasher().check_pw(login_password, hashed_password):
+                            st.session_state['authentication_status'] = True
+                            st.session_state['username'] = login_username
+                            st.session_state['name'] = user_info['name']
+                            st.session_state['user_role'] = user_info['role']
+                            
+                            st.success(f"¡Bienvenido, {user_info['name']}!")
+                            st.rerun() # Recarga para mostrar el contenido
+                            
+                        else:
+                            st.error('Usuario o Contraseña incorrecta.')
+                            
+                    else:
+                        st.error('Usuario o Contraseña incorrecta.')
 
 if __name__ == '__main__':
     main()
