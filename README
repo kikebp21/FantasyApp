@@ -1,85 +1,135 @@
-App para gestión de liga Fantasy
+# 🏟️ Fantasy League Manager App
 
-Creado con streamlite (interfaz gráfica, visualización), sqlite (base de datos) y Python (ñenguaje de programación)
+**Gestor de liga Fantasy diseñado para administradores y participantes.**
 
-Para hacer funcionar la app hay que tener descargadas las dependencias:
+Esta aplicación permite llevar la gestión, visualización y clasificación de una liga privada.
 
-- pip install pandas streamlit sqlalchemy
+### Tecnologías Utilizadas
 
-Utilizando VScode para programar, descargar:
+| Componente | Herramienta | Función |
+| :--- | :--- | :--- |
+| **Interfaz Gráfica** | Streamlit | Visualización de datos interactiva. |
+| **Base de Datos** | SQLite | Almacenamiento local de la información de la liga (puntos, jugadores, ligas). |
+| **Lógica de Negocio** | Python | Lenguaje de programación principal. |
+| **Autenticación** | Streamlit Authenticator | Control de acceso por credenciales y roles. |
 
-- Python
-- SQLite
-- SQLite Viewer (para visualizar la Base de Datos)
+-----
 
-Para iniciar la app:
+## 🔒 Nueva Modalidad de Acceso y Seguridad
 
-La primera vez:
+El sistema ahora soporta autenticación y roles de usuario:
 
-- Copiar código del repositorio
-- Abrir máquina virtual
-    # Crea el entorno virtual
-    - python -m venv venv 
-    # Activa el entorno virtual (si estás en Windows)
+  * **Administrador (`Admin`):** Acceso completo a todas las herramientas de gestión (Puntos, Participantes, Ligas).
+  * **Usuario (`User`):** Acceso limitado solo a las vistas de consulta (Clasificación, Rendimiento Individual, etc.), y **solo puede ver las ligas que le han sido asignadas.**
+
+-----
+
+## 📦 Requisitos Locales
+
+Para ejecutar la aplicación en tu máquina local:
+
+1.  **Software:** Python (v3.x), SQLite, VSCode (opcional, pero recomendado).
+2.  **Visualización DB (Opcional):** Instalar una extensión como **SQLite Viewer** en VSCode.
+
+### Dependencias de Python
+
+Para que la aplicación funcione, es crucial instalar las siguientes librerías:
+
+```bash
+pip install pandas streamlit sqlalchemy streamlit-authenticator
+```
+
+*(Nota: Ya están incluidas en tu `requirements.txt` después de ejecutar `pip freeze`)*
+
+-----
+
+## 🚀 Inicio de la Aplicación (Primer Uso)
+
+Sigue estos pasos para configurar y ejecutar la aplicación por primera vez.
+
+1.  **Copia el Repositorio:** Descarga todos los archivos del proyecto.
+
+2.  **Crea y Activa el Entorno Virtual:**
+
+    ```bash
+    # 1. Crea el entorno virtual
+    python -m venv venv 
+
+    # 2. Activa el entorno virtual (depende del sistema operativo):
+    # En Windows (PowerShell/CMD):
     .\venv\Scripts\activate 
-    # Activa el entorno virtual (si estás en macOS/Linux)
-    - source venv/bin/activate
-- python db_setup.py (esto creará la bd)
-- python import_data.py (si tienes datos en formato .csv y quieres importar en vez de añadir todos manualmente)
-- streamlit run app.py
+    # En macOS/Linux (Bash/Zsh):
+    source venv/bin/activate
 
-Después ya solo hacer:
+    # 3. Instala todas las dependencias:
+    pip install -r requirements.txt
+    ```
 
-- .\venv\Scripts\activate
-- streamlit run app.py
+3.  **Configura la Base de Datos:**
 
+    ```bash
+    # Esto creará el archivo fantasy.db y las tablas necesarias.
+    python db_setup.py 
+    ```
 
-Opciones para que la pueda ver otra persona:
-1. Usar entorno virtual para la edición:
-- Comprimir toda la carpeta del proyecto (incluyendo app.py, db_setup.py, import_data.py, requirements.txt, y fantasy.db).
-- Pasar el archivo comprimido.
-- Descomprimir la carpeta.
-- Crear el Entorno Virtual: python -m venv venv
-- Activar el Entorno: .\venv\Scripts\activate
-- Instalar dependencias: pip install -r requirements.txt
-- Ejecutar: streamlit run app.py
+4.  **Carga Inicial de Datos (Opcional):**
 
-2. Desplegar en Streamlit Community Cloud
-- Requisitos
-    - Repositorio de GitHub: Necesitas subir todo tu proyecto (app.py, import_data.py, fantasy.db, y el entorno virtual venv NO, pero sí el archivo de dependencias) a un repositorio público en GitHub.
+    ```bash
+    # Si tienes datos en formato CSV para importar:
+    python import_data.py
+    ```
 
-- Archivo de Dependencias (requirements.txt): Streamlit Cloud necesita saber qué librerías instalar.
+5.  **Inicia la Aplicación:**
 
-- Pasos para el Despliegue
-    A. Crear el Archivo requirements.txt
-    En tu Terminal (con venv activo), ejecuta este comando para crear el archivo que lista todas las dependencias:
+    ```bash
+    streamlit run app.py
+    ```
 
-    pip freeze > requirements.txt
+### Inicio Rápido (Usos Posteriores)
 
-    B. Subir el Proyecto a GitHub
-    Crea una cuenta en GitHub si no tienes una.
+Simplemente activa el entorno virtual y ejecuta la app:
 
-    Crea un nuevo repositorio público (ej: FantasyApp).
+```bash
+# Activa el entorno virtual
+.\venv\Scripts\activate  # o source venv/bin/activate
+# Ejecuta la app
+streamlit run app.py
+```
 
-    Sube todos tus archivos ese repositora io:
+-----
 
-    C. Desplegar en Streamlit Cloud
-    Ve a Streamlit Community Cloud (share.streamlit.io).
+## 🌐 Opciones para Compartir y Desplegar
 
-    Inicia sesión con tu cuenta de GitHub.
+### 1\. Compartir como Entorno Virtual (Edición Local)
 
-    Haz clic en "New App" o en el botón para desplegar.
+Si quieres que otra persona edite o use la aplicación localmente:
 
-    Selecciona tu repositorio, la rama principal (main) y el archivo principal (app.py).
+1.  Comprime toda la carpeta del proyecto (excepto la carpeta `venv`).
+2.  Pasa el archivo comprimido al usuario.
+3.  El usuario debe seguir los pasos de "Primer Uso" (Crear VENV, activar, `pip install -r`, etc.).
 
-    Haz clic en "Deploy!".
+### 2\. Despliegue en Streamlit Community Cloud (Recomendado)
 
-    Streamlit Cloud leerá tu requirements.txt, instalará las dependencias y lanzará tu aplicación. Una vez que esté lista, obtendrás un enlace único (ej: https://[tu-nombre].streamlit.app/[nombre-app]) que puedes compartir con tu amigo para que acceda y la use.
+Esta es la forma más fácil de compartir un enlace funcional.
 
-Nueva modalidad:
-- Separa entre usuario normal y administrador, en la que el usuario normal no puede acceder a las distintas opciones de gestión y el administrador si.
+#### Requisitos Adicionales:
 
+  * Un repositorio público en **GitHub** con todos los archivos (`app.py`, `config.py`, `requirements.txt`, etc.).
+  * **Advertencia sobre SQLite:** Streamlit Cloud no es persistente; cualquier dato escrito en `fantasy.db` se perderá tras unas horas. **Es esencial que tu `db_setup.py` pueda correr al inicio de la app para asegurar que las tablas existan.** Para un uso serio, se recomienda migrar a una base de datos externa (como PostgreSQL, Supabase o Google Sheets).
 
-App creada utilizando Gemini.
+#### Pasos para el Despliegue:
 
-Luis Enrique Barrero Peña.
+1.  **Crea `requirements.txt`:** (Ya lo hiciste en la configuración inicial, asegúrate de que esté en el repositorio).
+2.  **Sube el Proyecto a GitHub:** Sube todos los archivos (excepto la carpeta `venv` y el archivo `fantasy.db`) a un repositorio público.
+3.  **Despliega en Streamlit Cloud:**
+      * Ve a [Streamlit Community Cloud](https://share.streamlit.io/).
+      * Conecta con tu cuenta de GitHub.
+      * Haz clic en "New App" y selecciona el repositorio y la rama principal.
+      * Haz clic en **"Deploy\!"**.
+      * Comparte el enlace único generado.
+
+-----
+
+*App creada utilizando **Gemini**.*
+
+**Autor:** Luis Enrique Barrero Peña.
