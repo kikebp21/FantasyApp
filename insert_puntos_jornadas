@@ -1,0 +1,63 @@
+import pandas as pd
+from sqlalchemy import create_engine, text
+
+# 1. CONFIGURACIÓN DE LA CONEXIÓN (Asegúrate de que coincida con tu db_setup.py)
+# Si estás en local:
+DATABASE_URL = 'sqlite:///fantasy.db'
+
+# Si estuvieras en la nube (ejemplo con PostgreSQL):
+# from streamlit import secrets
+# DATABASE_URL = secrets["connections"]["database_url"] 
+
+try:
+    engine = create_engine(DATABASE_URL)
+    print(f"Conexión a la base de datos establecida: {DATABASE_URL}")
+except Exception as e:
+    print(f"Error al conectar con la base de datos: {e}")
+    exit()
+
+# 2. DEFINICIÓN DE LOS DATOS A INSERTAR
+# Estructura: (liga_id, jugador, jornada, puntos)
+# **ADAPTA ESTOS DATOS A TU LIGA REAL**
+datos_jornada = [
+    # Liga AKC
+    ('1', 'El Mago Ramón', 13, 83),
+    ('1', 'Anil Murthy Asado', 13, 62),
+    ('1', 'Guillermo Pellegrini', 13, 79),
+    ('1', 'Matías Almendra', 13, 40),
+    ('1', 'Batistuta9', 13, 81),
+    ('1', 'Minilopera', 13, 79),
+    ('1', 'Abbondanzieri, Pato', 13, 98),
+    ('1', 'Joota Jordi', 13, 43),
+    ('1', 'La Peina Fazio', 13, 69),
+    ('1', 'P4nchit0', 13, 0),
+]
+
+# 3. EJECUCIÓN DE LAS CONSULTAS DE INSERCIÓN
+def insertar_puntos_jornada(datos):
+    """Inserta los puntos en la tabla Puntos."""
+    # Usamos INSERT OR REPLACE para que si la fila ya existe (por ejemplo,
+    # si se meten los puntos dos veces), los reemplace.
+    sql_query = text("""
+        INSERT OR REPLACE INTO Puntos (liga_id, jugador, jornada, puntos) 
+        VALUES (:liga_id, :jugador, :jornada, :puntos)
+    """)
+    
+    with engine.connect() as connection:
+        trans = connection.begin()
+        try:
+            for liga_id, jugador, jornada, puntos in datos:
+                connection.execute(sql_query, 
+                                   {'liga_id': liga_id, 
+                                    'jugador': jugador, 
+                                    'jornada': jornada, 
+                                    'puntos': puntos})
+                print(f"✅ Insertado: Liga={liga_id}, Jugador={jugador}, Jornada={jornada}, Puntos={puntos}")
+            trans.commit()
+            print("\n*** Todos los puntos de la jornada han sido insertados exitosamente. ***")
+        except Exception as e:
+            trans.rollback()
+            print(f"\n❌ ERROR: La transacción ha fallado. Revisar la estructura de la tabla Puntos. Error: {e}")
+
+if __name__ == '__main__':
+    insertar_puntos_jornada(datos_jornada)
