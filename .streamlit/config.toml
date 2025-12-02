@@ -22,8 +22,6 @@ font="sans serif"
 # (Generalmente no es necesario cambiarla, pero es buena práctica)
 # developmentMode = false
 
-
-[global]
 # Esta sección fuerza el uso de un ancho de columna más amplio 
 # para que los DataFrames y gráficos se vean mejor.
 # Aunque no afecta el color, mejora la distribución visual de tu app.

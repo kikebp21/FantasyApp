@@ -25,7 +25,7 @@ datos_jornada_13 = [
     ('1', 'P4nchit0', 13, 0),
 ]
 
-datos_jornada = [
+datos_jornada_14 = [
     # Liga AKC
     ('1', 'El Mago Ramón', 14, 92),
     ('1', 'Anil Murthy Asado', 14, 61),
