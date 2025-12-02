@@ -21,16 +21,16 @@ except Exception as e:
 # **ADAPTA ESTOS DATOS A TU LIGA REAL**
 datos_jornada = [
     # Liga AKC
-    ('1', 'El Mago Ramón', 13, 83),
-    ('1', 'Anil Murthy Asado', 13, 62),
-    ('1', 'Guillermo Pellegrini', 13, 79),
-    ('1', 'Matías Almendra', 13, 40),
-    ('1', 'Batistuta9', 13, 81),
-    ('1', 'Minilopera', 13, 79),
-    ('1', 'Abbondanzieri, Pato', 13, 98),
-    ('1', 'Joota Jordi', 13, 43),
-    ('1', 'La Peina Fazio', 13, 69),
-    ('1', 'P4nchit0', 13, 0),
+    ('1', 'El Mago Ramón', 14, 92),
+    ('1', 'Anil Murthy Asado', 14, 61),
+    ('1', 'Guillermo Pellegrini', 14, 61),
+    ('1', 'Matías Almendra', 14, 0),
+    ('1', 'Batistuta9', 14, 71),
+    ('1', 'Minilopera', 14, 0),
+    ('1', 'Abbondanzieri, Pato', 14, 90),
+    ('1', 'Joota Jordi', 14, 60),
+    ('1', 'La Peina Fazio', 14, 62),
+    ('1', 'P4nchit0', 14, 0),
 ]
 
 # 3. EJECUCIÓN DE LAS CONSULTAS DE INSERCIÓN

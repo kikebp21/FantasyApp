@@ -1,12 +1,40 @@
-DATOS_CSV = """Nombre,Jornada 1,Jornada 2,Jornada 3,Jornada 4,Jornada 5,Jornada 6,Jornada 7,Jornada 8,Jornada 9,Jornada 10,Jornada 11,Jornada 12,Jornada 13
-El Mago Ramón,94,66,94,76,75,81,58,82,74,77,68,56,83
-Anil Murthy Asado,80,74,45,48,74,69,75,50,58,75,101,75,62
-Guillermo Pellegrini,79,66,67,57,106,59,75,100,52,43,58,82,79
-Matías Almendra,77,63,61,54,86,50,60,47,45,0,74,59,40
-Batistuta9,73,71,67,38,72,96,53,84,88,59,71,80,81
-Minilopera,63,34,40,29,51,27,63,54,42,32,42,42,79
-"Abbondanzieri, Pato",59,110,60,82,37,52,68,34,72,69,73,96,98
-Joota Jordi,57,50,58,31,80,73,75,34,79,71,62,31,43
-La Peina Fazio,47,34,59,47,37,30,86,44,101,72,71,62,69
-P4nchit0,32,0,35,0,0,0,37,17,17,11,18,61,0
+DATOS_CSV = """Nombre,Jornada 1,Jornada 2,Jornada 3,Jornada 4,Jornada 5,Jornada 6,Jornada 7,Jornada 8,Jornada 9,Jornada 10,Jornada 11,Jornada 12,Jornada 13,Jornada 14
+El Mago Ramón,94,66,94,76,75,81,58,82,74,77,68,56,83,92
+Anil Murthy Asado,80,74,45,48,74,69,75,50,58,75,101,75,62,61
+Guillermo Pellegrini,79,66,67,57,106,59,75,100,52,43,58,82,79,61
+Matías Almendra,77,63,61,54,86,50,60,47,45,0,74,59,40,0
+Batistuta9,73,71,67,38,72,96,53,84,88,59,71,80,81,71
+Minilopera,63,34,40,29,51,27,63,54,42,32,42,42,79,0
+"Abbondanzieri, Pato",59,110,60,82,37,52,68,34,72,69,73,96,98,90
+Joota Jordi,57,50,58,31,80,73,75,34,79,71,62,31,43,60
+La Peina Fazio,47,34,59,47,37,30,86,44,101,72,71,62,69,62
+P4nchit0,32,0,35,0,0,0,37,17,17,11,18,61,0,0
 """
+
+datos_jornada_13 = [
+    # Liga AKC
+    ('1', 'El Mago Ramón', 13, 83),
+    ('1', 'Anil Murthy Asado', 13, 62),
+    ('1', 'Guillermo Pellegrini', 13, 79),
+    ('1', 'Matías Almendra', 13, 40),
+    ('1', 'Batistuta9', 13, 81),
+    ('1', 'Minilopera', 13, 79),
+    ('1', 'Abbondanzieri, Pato', 13, 98),
+    ('1', 'Joota Jordi', 13, 43),
+    ('1', 'La Peina Fazio', 13, 69),
+    ('1', 'P4nchit0', 13, 0),
+]
+
+datos_jornada = [
+    # Liga AKC
+    ('1', 'El Mago Ramón', 14, 92),
+    ('1', 'Anil Murthy Asado', 14, 61),
+    ('1', 'Guillermo Pellegrini', 14, 61),
+    ('1', 'Matías Almendra', 14, 0),
+    ('1', 'Batistuta9', 14, 71),
+    ('1', 'Minilopera', 14, 0),
+    ('1', 'Abbondanzieri, Pato', 14, 90),
+    ('1', 'Joota Jordi', 14, 60),
+    ('1', 'La Peina Fazio', 14, 62),
+    ('1', 'P4nchit0', 14, 0),
+]
