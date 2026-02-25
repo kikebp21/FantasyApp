@@ -130,6 +130,14 @@ Esta es la forma más fácil de compartir un enlace funcional.
 
 -----
 
+### Pasos para commit:
+1. \venv\Scripts\Activate.ps1
+2. streamlit run app.py
+3. git status
+4. git add .
+5. git commit -m "Jornada..."
+6. git push origin main
+
 *App creada utilizando **Gemini**.*
 
 **Autor:** Luis Enrique Barrero Peña.
