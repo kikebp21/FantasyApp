@@ -50,6 +50,34 @@ def obtener_max_jornada(liga_id):
             return int(max_j) if max_j else 0
     except:
         return 0
+    
+@st.cache_data(ttl=600)
+def obtener_puestos_por_jornada(liga_id):
+    """Calcula el puesto exacto de cada jugador en cada jornada (general acumulada)."""
+    try:
+        df = pd.read_sql(f"""
+            SELECT jugador, jornada, puntos 
+            FROM Puntos 
+            WHERE liga_id = {liga_id}
+            ORDER BY jornada ASC
+        """, engine)
+        
+        if df.empty:
+            return pd.DataFrame()
+        
+        # 1. Pivotar para tener las jornadas como filas y los jugadores como columnas
+        df_pivot = df.pivot(index='jornada', columns='jugador', values='puntos').fillna(0)
+        
+        # 2. Calcular la evolución de puntos acumulados jornada a jornada
+        df_acumulado = df_pivot.cumsum()
+        
+        # 3. Calcular el puesto (ranking) de cada jugador en cada jornada
+        df_puestos = df_acumulado.rank(axis=1, ascending=False, method='min').astype(int)
+        
+        return df_puestos # Devuelve las posiciones reales jornada a jornada
+    except Exception as e:
+        st.error(f"Error al calcular los puestos por jornada: {e}")
+        return pd.DataFrame()
 
 def guardar_puntos(liga_id, jugador, jornada, puntos):
     """Inserta o actualiza los puntos en la BD."""
@@ -281,7 +309,7 @@ def interfaz_rendimiento_jugador(liga_id, jugadores):
                 df_detalle.rename(columns={'jornada': 'Jornada', 'puntos': 'Puntos'}), 
                 use_container_width=True, 
                 hide_index=True,
-                column_order=("Jornada", "Puntos") # Quitamos la columna 'jugador' que es obvia
+                column_order=("Jornada", "Puntos")
             )
         else:
             st.info("No se encontraron jornadas que cumplan este criterio.")
@@ -315,6 +343,63 @@ def interfaz_rendimiento_jugador(liga_id, jugadores):
         
         st.info("Top 5 Puntuaciones Individuales:")
         st.dataframe(df_record, use_container_width=True, hide_index=True)
+
+    # 3. HISTORIAL DE POSICIONES EN LA GENERAL
+    st.markdown("---")
+    st.subheader("3. Regularidad: Jornadas en cada Posición de la General")
+    st.markdown("Descubre cuántas jornadas totales ha pasado cada jugador en cada puesto de la clasificación acumulada.")
+    
+    # Obtener la matriz base jornada a jornada
+    df_puestos = obtener_puestos_por_jornada(liga_id)
+    
+    if not df_puestos.empty:
+        # --- PARTE A: TABLA DE RESUMEN GLOBAL ---
+        # Calculamos los totales (frecuencias) para la tabla general
+        historial = {}
+        for jugador in df_puestos.columns:
+            historial[jugador] = df_puestos[jugador].value_counts().to_dict()
+            
+        df_posiciones = pd.DataFrame(historial).T.fillna(0).astype(int)
+        df_posiciones = df_posiciones.reindex(columns=sorted(df_posiciones.columns))
+        
+        # Renombrar columnas para la visualización (1º, 2º...)
+        df_posiciones.columns = [f"{col}º" for col in df_posiciones.columns]
+        df_posiciones = df_posiciones.reset_index().rename(columns={'index': 'Jugador'})
+        
+        # Ordenar dando prioridad a quien ha estado más semanas en 1º, luego 2º, etc.
+        columnas_puestos = [col for col in df_posiciones.columns if col != 'Jugador']
+        df_posiciones = df_posiciones.sort_values(by=columnas_puestos, ascending=False)
+        
+        # Mostrar la matriz completa de todos los jugadores
+        st.dataframe(df_posiciones, use_container_width=True, hide_index=True)
+        
+        
+        # --- PARTE B: NUEVO BUSCADOR FILTRADO ---
+        st.markdown("##### 🔍 Consultar jornadas específicas por posición")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            # Desplegable de Jugador (ordenado alfabéticamente)
+            jug_busqueda = st.selectbox("Selecciona Jugador:", sorted(df_puestos.columns), key="sb_jug_pos")
+            
+        with col2:
+            # Averiguar qué puestos reales ha pisado este jugador en el torneo
+            puestos_posibles = sorted(list(df_puestos[jug_busqueda].unique()))
+            # El format_func hace que el usuario vea "1º" pero Python maneje el número entero interno
+            puesto_busqueda = st.selectbox("Selecciona Posición:", puestos_posibles, format_func=lambda x: f"{x}º", key="sb_puesto_num")
+            
+        # Filtrar el índice (las jornadas) donde se cumple la condición
+        jornadas_filtradas = df_puestos.index[df_puestos[jug_busqueda] == puesto_busqueda].tolist()
+        
+        if jornadas_filtradas:
+            # Crear un texto limpio uniendo las jornadas con comas (ej: "Jornada 1, Jornada 4")
+            jornadas_texto = ", ".join([f"Jornada {j}" for j in jornadas_filtradas])
+            st.success(f"📌 **{jug_busqueda}** ocupó la posición **{puesto_busqueda}º** en:  \n{jornadas_texto} *(Total: {len(jornadas_filtradas)} jornadas)*")
+        else:
+            st.info(f"**{jug_busqueda}** no ha estado en la posición **{puesto_busqueda}º** en ninguna jornada.")
+            
+    else:
+        st.info("No hay suficientes jornadas registradas para procesar el histórico de posiciones.")
 
 
 def interfaz_pivote_completo(liga_id, nombre_liga):
@@ -427,7 +512,7 @@ def interfaz_consultas(liga_id):
             jornada, 
             ROUND(AVG(puntos), 2) as "Media de la Jornada"
         FROM Puntos 
-        WHERE liga_id = {liga_id}
+        WHERE liga_id = {liga_id} AND puntos > 0
         GROUP BY jornada 
         ORDER BY jornada ASC
     """, engine)
